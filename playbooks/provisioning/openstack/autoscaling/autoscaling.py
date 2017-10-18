@@ -1,7 +1,13 @@
 import argparse
-import shade
+import os
 import signal
 import sys
+
+
+from gnocchiclient.v1 import client
+from keystoneauth1.identity import generic as keystone_id
+from keystoneauth1 import session
+import shade
 
 
 # Handle SIGINT, SIGTERM
@@ -22,12 +28,35 @@ class AutoScaling:
 
     check_history = [False, False, False] # True = workload exceeded
     interval = 1 # in minutes, describes how often a check is performed
+    gnocchi_session = None
 
-    def AutoScaling(self):
-        pass
+    def __init__(self):
+        # Connect to OpenStack with shade
+        #self.shade_cloud = shade.openstack_cloud()
+        # shade example
+        #networks = self.shade_cloud.list_networks()
+        #print(networks)
+
+        # Connect to Gnocchi client
+        auth = keystone_id.Password(auth_url=os.environ["OS_AUTH_URL"],
+                                    username=os.environ["OS_USERNAME"],
+                                    password=os.environ["OS_PASSWORD"],
+                                    project_name=os.environ["OS_TENANT_NAME"])
+        keystone_session = session.Session(auth=auth)
+        self.gnocchi_session = client.Client(session=keystone_session)
+
+        # Gnocchi Example
+        self.gnocchi_session.metric.create({'name':'hello'})
+        print(self.gnocchi_session.metric.list())
+
+
+    # http://gnocchi.xyz/gnocchiclient/api.html#usage
+    # https://github.com/openstack/tripleo-validations/blob/master/tripleo_validations/utils.py
+       
 
     def gather_metrics(self):
         ''' Gathers metrics '''
+        # https://github.com/redhat-openstack/openshift-on-openstack/blob/master/openshift.yaml#L804-L840
         pass
 
     def analyse_workload(self):
@@ -59,8 +88,7 @@ class AutoScaling:
     def run_prototype(self):
         ''' Perform checks every minute.
             If CPU workload exceeds 70% 3 times in a row, scale up by 1. '''
-        while True:
-            pass
+        pass
 
 
 if __name__ == "__main__":
