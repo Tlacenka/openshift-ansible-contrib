@@ -25,7 +25,6 @@ class SIGALRM(Exception):
 
 # Handle SIGALRM
 def handler(signum, frame):
-    # print('SIGALRM received, setting a new one.')
     signal.alarm(alarm_interval)
     raise SIGALRM("Start another check")
 
@@ -68,9 +67,6 @@ class AutoScaling:
 
         # print(self.gnocchi_session.metric.list())
 
-        # Add measures to it?
-        # self.gnocchi_session.metric.add_measures(cpu_util_id,)
-
         # Delete the metric
         self.gnocchi_session.metric.delete(cpu_util_id)
 
@@ -98,11 +94,21 @@ class AutoScaling:
     def trigger_upscaling(self):
         ''' Perform upscaling.
             Make sure next scaling event starts
-            after the current one is finished. '''
+            after the current one is finished.
+            For now, alarm is reset after scaling is done to prevent
+            alarm going off while scaling is in progress. '''
+
         try:
-            call(['sleep', '5'])
             if self.debug:
-                print('Upscaling ended.')
+                print('Stopping alarm')
+            signal.alarm(0)
+
+            # Scaling process
+            call(['sleep', '5'])
+
+            if self.debug:
+                print('Upscaling ended. Resetting alarm.')
+            signal.alarm(alarm_interval)
         except KeyboardInterrupt:
             print('SIGINT received, ending run.')
             sys.exit(0)
@@ -111,22 +117,30 @@ class AutoScaling:
         ''' Gathers metrics,
             decides whether to trigger a scaling event
             (and does so if needed). '''
-        try:
-            self.gather_metrics()
-            self.analyse_workload()
 
-            if self.debug:
-                print('Decision making')
+        try_again = True
 
-            if self.upscaling_required():
+        while try_again:
+            try:
+                self.gather_metrics()
+                self.analyse_workload()
+
                 if self.debug:
-                    print('Upscaling started')
-                self.trigger_upscaling()
+                    print('Decision making')
 
-            print('End of check')
-        except KeyboardInterrupt:
-            print('SIGINT received, ending run.')
-            sys.exit(0)
+                if self.upscaling_required():
+                    if self.debug:
+                        print('Upscaling started')
+                    self.trigger_upscaling()
+
+                print('End of check')
+                try_again = False
+            except KeyboardInterrupt:
+                print('SIGINT received, ending run.')
+                sys.exit(0)
+            except SIGALRM:
+                if self.debug:
+                    print('Check lasted more than expected. Starting anew.')
 
     def run_prototype(self):
         ''' Perform checks every minute.
