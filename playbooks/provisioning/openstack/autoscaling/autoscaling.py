@@ -25,7 +25,7 @@ class SIGALRM(Exception):
 
 # Handle SIGALRM
 def handler(signum, frame):
-    print('SIGALRM received, setting a new one.')
+    # print('SIGALRM received, setting a new one.')
     signal.alarm(alarm_interval)
     raise SIGALRM("Start another check")
 
@@ -39,10 +39,14 @@ class AutoScaling:
         scaling events when certain limits are met. '''
 
     check_history = [False, False, False]  # True = workload exceeded
-    interval = 1  # in minutes, describes how often a check is performed
     gnocchi_session = None
+    debug = False
 
-    def __init__(self):
+    def __init__(self, debug):
+
+        # Set attribute
+        self.debug = debug
+
         # Connect to OpenStack with shade
         # self.shade_cloud = shade.openstack_cloud()
         # shade example
@@ -61,7 +65,8 @@ class AutoScaling:
         # Create a metric
         cpu_util_id = self.gnocchi_session.metric.create(
                       {'name': 'cpu_util'})['id']
-        print(self.gnocchi_session.metric.list())
+
+        # print(self.gnocchi_session.metric.list())
 
         # Add measures to it?
         # self.gnocchi_session.metric.add_measures(cpu_util_id,)
@@ -69,7 +74,8 @@ class AutoScaling:
         # Delete the metric
         self.gnocchi_session.metric.delete(cpu_util_id)
 
-        print('Setting first alarm')
+        if self.debug:
+            print('Setting first alarm')
         signal.alarm(alarm_interval)
 
     def gather_metrics(self):
@@ -95,7 +101,8 @@ class AutoScaling:
             after the current one is finished. '''
         try:
             call(['sleep', '5'])
-            print('Upscaling ended.')
+            if self.debug:
+                print('Upscaling ended.')
         except KeyboardInterrupt:
             print('SIGINT received, ending run.')
             sys.exit(0)
@@ -108,9 +115,12 @@ class AutoScaling:
             self.gather_metrics()
             self.analyse_workload()
 
-            print('Decision making')
+            if self.debug:
+                print('Decision making')
+
             if self.upscaling_required():
-                print('Upscaling started')
+                if self.debug:
+                    print('Upscaling started')
                 self.trigger_upscaling()
 
             print('End of check')
@@ -123,7 +133,9 @@ class AutoScaling:
             If CPU workload exceeds 70% 3 times in a row, scale up by 1. '''
 
         while True:
-            print('Running prototype')
+            if self.debug:
+                print('Running prototype')
+
             try:
                 while True:
                     time.sleep(1)
@@ -131,7 +143,8 @@ class AutoScaling:
                 print('SIGINT received, ending run.')
                 sys.exit(0)
             except SIGALRM:
-                print('run_prototype: SIGALRM')
+                if self.debug:
+                    print('run_prototype: SIGALRM')
                 self.perform_check()
 
 
@@ -139,13 +152,19 @@ if __name__ == '__main__':
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--interval', type=int, default=1)
+    parser.add_argument('--interval', type=int, default=60)
+    parser.add_argument('--debug', action='store_true')
+    args = parser.parse_args()
+
+    # Set alarm interval
+    alarm_interval = args.interval
 
     # Create and run an autoscaling service
-    service = AutoScaling()
+    service = AutoScaling(args.debug)
 
-    print('Auto-scaling service is starting.' +
-          'In order to stop this service in a clean manner, press Ctrl+C.')
+    if service.debug:
+        print('Auto-scaling service is starting.' +
+              'In order to stop this service in a clean manner, press Ctrl+C.')
     service.run_prototype()
 
 
