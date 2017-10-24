@@ -15,7 +15,7 @@ import shade
 
 
 # Global variables
-alarm_interval = 15
+alarm_interval = 60
 
 
 # Exception for when alarm has been activated
@@ -39,16 +39,24 @@ class AutoScaling:
 
     check_history = [False, False, False]  # True = workload exceeded
     gnocchi_session = None
-    debug = False
 
-    def __init__(self, debug):
+    debug = False
+    increment_by = 1
+    inventory_path = ''
+    openshift_ansible_path = ''
+    upscaling_path = ''
+
+    def __init__(self, debug, inventory_path, openshift_ansible_path,
+                 upscaling_path):
 
         # Set attribute
         self.debug = debug
+        self.inventory_path = inventory_path
+        self.openshift_ansible_path = openshift_ansible_path
+        self.upscaling_path = upscaling_path
 
-        # Connect to OpenStack with shade
-        # self.shade_cloud = shade.openstack_cloud()
         # shade example
+        # self.shade_cloud = shade.openstack_cloud()
         # networks = self.shade_cloud.list_networks()
         # print(networks)
 
@@ -104,7 +112,9 @@ class AutoScaling:
             signal.alarm(0)
 
             # Scaling process
-            call(['sleep', '5'])
+            call(['ansible-playbook', '-i', self.inventory_path,
+                  '-e', 'increment_by=' + str(self.increment_by),
+                  self.upscaling_path])
 
             if self.debug:
                 print('Upscaling ended. Resetting alarm.')
@@ -167,6 +177,11 @@ if __name__ == '__main__':
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--interval', type=int, default=60)
+    parser.add_argument('--inventory_path', type=str, default='inventory')
+    parser.add_argument('--openshift_ansible_path', type=str,
+                        default='openshift-ansible')
+    parser.add_argument('--upscaling_path', type=str,
+                        default='openshift-ansible-contrib/playbooks/provisioning/openstack/scale-up.yaml')
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
@@ -174,7 +189,8 @@ if __name__ == '__main__':
     alarm_interval = args.interval
 
     # Create and run an autoscaling service
-    service = AutoScaling(args.debug)
+    service = AutoScaling(args.debug, args.inventory_path,
+                          args.openshift_ansible_path, args.upscaling_path)
 
     if service.debug:
         print('Auto-scaling service is starting.' +
