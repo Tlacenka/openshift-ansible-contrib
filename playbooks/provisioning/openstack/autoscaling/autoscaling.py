@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import argparse
 import os
 import signal
@@ -15,9 +17,11 @@ import shade
 # Global variables
 alarm_interval = 15
 
+
 # Exception for when alarm has been activated
 class SIGALRM(Exception):
     pass
+
 
 # Handle SIGALRM
 def handler(signum, frame):
@@ -34,18 +38,16 @@ class AutoScaling:
         Its main method runs in the background, gathers metrics and triggers
         scaling events when certain limits are met. '''
 
-    check_history = [False, False, False] # True = workload exceeded
-    interval = 1 # in minutes, describes how often a check is performed
+    check_history = [False, False, False]  # True = workload exceeded
+    interval = 1  # in minutes, describes how often a check is performed
     gnocchi_session = None
-
-   
 
     def __init__(self):
         # Connect to OpenStack with shade
-        #self.shade_cloud = shade.openstack_cloud()
+        # self.shade_cloud = shade.openstack_cloud()
         # shade example
-        #networks = self.shade_cloud.list_networks()
-        #print(networks)
+        # networks = self.shade_cloud.list_networks()
+        # print(networks)
 
         # Connect to Gnocchi client
         auth = keystone_id.Password(auth_url=os.environ['OS_AUTH_URL'],
@@ -57,22 +59,15 @@ class AutoScaling:
 
         # Gnocchi Example
         # Create a metric
-        cpu_util_id = self.gnocchi_session.metric.create({'name':'cpu_util'})['id']
+        cpu_util_id = self.gnocchi_session.metric.create(
+                      {'name': 'cpu_util'})['id']
         print(self.gnocchi_session.metric.list())
 
-        # Add measures to it
-        #self.gnocchi_session.metric.add_measures(cpu_util_id,)
+        # Add measures to it?
+        # self.gnocchi_session.metric.add_measures(cpu_util_id,)
 
         # Delete the metric
         self.gnocchi_session.metric.delete(cpu_util_id)
-
-        # So get all app nodes, their ids, collect metrics from all and get avg?
-
-        # http://gnocchi.xyz/gnocchiclient/api.html#usage
-        # https://github.com/openstack/tripleo-validations/blob/master/tripleo_validations/utils.py
-        # http://aalvarez.me/blog/posts/understanding-gnocchi-measures.html
-        # http://gnocchi.xyz/gnocchiclient/api/gnocchiclient.v1.metric.html
-        # https://julien.danjou.info/blog/2015/openstack-gnocchi-first-release
 
         print('Setting first alarm')
         signal.alarm(alarm_interval)
@@ -89,14 +84,15 @@ class AutoScaling:
 
     def upscaling_required(self):
         ''' Based on analysis result, return whether scaling should be triggered.
-            In this case, it is whenever workload exceeds limit 3 times in a row. '''
+            In this case, whenever workload exceeds limit 3 times in a row. '''
 
         return True
-        #return all(self.history_check)
+        # return all(self.history_check)
 
     def trigger_upscaling(self):
         ''' Perform upscaling.
-            Make sure next scaling event starts after the current one is finished. '''
+            Make sure next scaling event starts
+            after the current one is finished. '''
         try:
             call(['sleep', '5'])
             print('Upscaling ended.')
@@ -116,6 +112,7 @@ class AutoScaling:
             if self.upscaling_required():
                 print('Upscaling started')
                 self.trigger_upscaling()
+
             print('End of check')
         except KeyboardInterrupt:
             print('SIGINT received, ending run.')
@@ -138,7 +135,7 @@ class AutoScaling:
                 self.perform_check()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     # Parse arguments
     parser = argparse.ArgumentParser()
@@ -146,4 +143,16 @@ if __name__ == "__main__":
 
     # Create and run an autoscaling service
     service = AutoScaling()
+
+    print('Auto-scaling service is starting.' +
+          'In order to stop this service in a clean manner, press Ctrl+C.')
     service.run_prototype()
+
+
+# Sources, documentation:
+# So get all app nodes, their ids, collect metrics from all and get avg?
+# http://gnocchi.xyz/gnocchiclient/api.html#usage
+# https://github.com/openstack/tripleo-validations/blob/master/tripleo_validations/utils.py
+# http://aalvarez.me/blog/posts/understanding-gnocchi-measures.html
+# http://gnocchi.xyz/gnocchiclient/api/gnocchiclient.v1.metric.html
+# https://julien.danjou.info/blog/2015/openstack-gnocchi-first-release
