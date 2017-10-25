@@ -112,9 +112,16 @@ class AutoScaling:
             signal.alarm(0)
 
             # Scaling process
-            call(['ansible-playbook', '-i', self.inventory_path,
-                  '-e', 'increment_by=' + str(self.increment_by),
-                  self.upscaling_path])
+
+            # Create tmp file for output
+            with open('tmp.out', 'w') as fp:
+                retval = call(['ansible-playbook', '-i', self.inventory_path,
+                               '-e', 'increment_by=' + str(self.increment_by),
+                               self.upscaling_path], stdout=fp, stderr=fp)
+
+            if retval:
+                print('Upscaling failed. For more info, open tmp.out')
+                sys.exit(1)
 
             if self.debug:
                 print('Upscaling ended. Resetting alarm.')
