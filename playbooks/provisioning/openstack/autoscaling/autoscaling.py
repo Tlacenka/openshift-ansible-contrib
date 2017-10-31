@@ -1,5 +1,11 @@
 #!/usr/bin/python
 
+"""This module contains a class for auto-scaling prototype.
+
+It scales application nodes in the OpenShift on OpenStack environment.
+"""
+
+
 import argparse
 import logging
 import os
@@ -19,16 +25,23 @@ import shade
 alarm_interval = 60
 
 
-# Exception for when alarm has been activated
+# Exception for alarm handling
 class SIGALRM(Exception):
+    """Exception used when alarm has been activated."""
+
     pass
 
-# Exception for when scaling has failed
+
+# Exception for scaling error handling
 class ScalingFailed(Exception):
+    """Exception used when scaling has failed."""
+
     pass
+
 
 # Handle SIGALRM
 def handler(signum, frame):
+    """Handle the SIGALRM."""
     signal.alarm(alarm_interval)
     raise SIGALRM("Start another check")
 
@@ -37,13 +50,17 @@ signal.signal(signal.SIGALRM, handler)
 
 # Main autoscaling class
 class AutoScaling:
-    '''This class implements the autoscaling service.
-       Its main method runs in the background, gathers metrics and triggers
-       scaling events when certain limits are met.
-    '''
+    """This class implements the autoscaling service.
+
+    Its main method runs in the background, gathers metrics and triggers
+    scaling events when certain limits are met.
+    """
 
     def __init__(self, inventory_path, openshift_ansible_path, upscaling_path):
+        """Class instance initialization.
 
+        Attributes are set, OpenStack authentication is performed.
+        """
         # Set attributes
         self.check_history = [False, False, False]  # True = workload exceeded
         self.increment_by = 1
@@ -78,32 +95,33 @@ class AutoScaling:
         signal.alarm(alarm_interval)
 
     def gather_metrics(self):
-        '''Gathers metrics'''
+        """Gather metrics."""
         # https://github.com/redhat-openstack/openshift-on-openstack/blob/master/openshift.yaml#L804-L840
         pass
 
     def analyse_workload(self):
-        '''Run algorithm/check to determine whether scaling should be triggered.
-           Store results (in this case, to check_history).
-        '''
+        """Run algorithm/check to determine whether scaling should be triggered.
+
+        Store results (in this case, to check_history).
+        """
         pass
 
     def upscaling_required(self):
-        '''Based on analysis result, return whether scaling should be triggered.
-           In this case, whenever workload exceeds limit 3 times in a row.
-        '''
+        """Based on analysis result, return whether scaling should be triggered.
 
+        In this case, whenever workload exceeds limit 3 times in a row.
+        """
         return True
         # return all(self.history_check)
 
     def trigger_upscaling(self):
-        '''Perform upscaling.
-           Make sure next scaling event starts
-           after the current one is finished.
-           For now, alarm is reset after scaling is done to prevent
-           alarm going off while scaling is in progress.
-        '''
+        """Perform upscaling.
 
+        Make sure that the next scaling event starts after the current one
+        is finished.
+        For now, alarm is reset after scaling is done to prevent
+        alarm going off while scaling is in progress.
+        """
         try:
             logging.debug('Stopping alarm')
             signal.alarm(0)
@@ -124,11 +142,11 @@ class AutoScaling:
             raise
 
     def perform_check(self):
-        '''Gathers metrics,
-           decides whether to trigger a scaling event
-           (and does so if needed).
-        '''
+        """Perform regular check.
 
+        Gathers metrics, decides whether to trigger a scaling event
+        (and does so if needed).
+        """
         try_again = True
 
         while try_again:
@@ -150,10 +168,10 @@ class AutoScaling:
                 raise
 
     def run_prototype(self):
-        '''Perform checks every minute.
-           If CPU workload exceeds 70% 3 times in a row, scale up by 1.
-        '''
+        """Perform checks every minute.
 
+        If CPU workload exceeds 70% 3 times in a row, scale up by 1.
+        """
         while True:
             logging.debug('Running prototype')
 
