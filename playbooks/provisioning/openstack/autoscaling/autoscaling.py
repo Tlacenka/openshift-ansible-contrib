@@ -33,23 +33,17 @@ signal.signal(signal.SIGALRM, handler)
 
 # Main autoscaling class
 class AutoScaling:
-    ''' This class implements the autoscaling service.
-        Its main method runs in the background, gathers metrics and triggers
-        scaling events when certain limits are met. '''
-
-    check_history = [False, False, False]  # True = workload exceeded
-    gnocchi_session = None
-
-    debug = False
-    increment_by = 1
-    inventory_path = ''
-    openshift_ansible_path = ''
-    upscaling_path = ''
+    '''This class implements the autoscaling service.
+       Its main method runs in the background, gathers metrics and triggers
+       scaling events when certain limits are met.
+    '''
 
     def __init__(self, debug, inventory_path, openshift_ansible_path,
                  upscaling_path):
 
-        # Set attribute
+        # Set attributes
+        self.check_history = [False, False, False]  # True = workload exceeded
+        self.increment_by = 1
         self.debug = debug
         self.inventory_path = inventory_path
         self.openshift_ansible_path = openshift_ansible_path
@@ -83,28 +77,31 @@ class AutoScaling:
         signal.alarm(alarm_interval)
 
     def gather_metrics(self):
-        ''' Gathers metrics '''
+        '''Gathers metrics'''
         # https://github.com/redhat-openstack/openshift-on-openstack/blob/master/openshift.yaml#L804-L840
         pass
 
     def analyse_workload(self):
-        ''' Run algorithm/check to determine whether scaling should be triggered.
-            Store results (in this case, to check_history). '''
+        '''Run algorithm/check to determine whether scaling should be triggered.
+           Store results (in this case, to check_history).
+        '''
         pass
 
     def upscaling_required(self):
-        ''' Based on analysis result, return whether scaling should be triggered.
-            In this case, whenever workload exceeds limit 3 times in a row. '''
+        '''Based on analysis result, return whether scaling should be triggered.
+           In this case, whenever workload exceeds limit 3 times in a row.
+        '''
 
         return True
         # return all(self.history_check)
 
     def trigger_upscaling(self):
-        ''' Perform upscaling.
-            Make sure next scaling event starts
-            after the current one is finished.
-            For now, alarm is reset after scaling is done to prevent
-            alarm going off while scaling is in progress. '''
+        '''Perform upscaling.
+           Make sure next scaling event starts
+           after the current one is finished.
+           For now, alarm is reset after scaling is done to prevent
+           alarm going off while scaling is in progress.
+        '''
 
         try:
             if self.debug:
@@ -112,13 +109,12 @@ class AutoScaling:
             signal.alarm(0)
 
             # Scaling process
-
-            # Create tmp file for output
             with open('tmp.out', 'w') as fp:
                 retval = call(['ansible-playbook', '-i', self.inventory_path,
                                '-e', 'increment_by=' + str(self.increment_by),
                                self.upscaling_path], stdout=fp, stderr=fp)
 
+            # Check if it succeeded
             if retval:
                 print('Upscaling failed. For more info, open tmp.out')
                 sys.exit(1)
@@ -131,9 +127,10 @@ class AutoScaling:
             sys.exit(0)
 
     def perform_check(self):
-        ''' Gathers metrics,
-            decides whether to trigger a scaling event
-            (and does so if needed). '''
+        '''Gathers metrics,
+           decides whether to trigger a scaling event
+           (and does so if needed).
+        '''
 
         try_again = True
 
@@ -160,8 +157,9 @@ class AutoScaling:
                     print('Check lasted more than expected. Starting anew.')
 
     def run_prototype(self):
-        ''' Perform checks every minute.
-            If CPU workload exceeds 70% 3 times in a row, scale up by 1. '''
+        '''Perform checks every minute.
+           If CPU workload exceeds 70% 3 times in a row, scale up by 1.
+        '''
 
         while True:
             if self.debug:
@@ -183,17 +181,22 @@ if __name__ == '__main__':
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--interval', type=int, default=60)
-    parser.add_argument('--inventory_path', type=str, default='inventory')
-    parser.add_argument('--openshift_ansible_path', type=str,
-                        default='openshift-ansible')
-    parser.add_argument('--upscaling_path', type=str,
-                        default='openshift-ansible-contrib/playbooks/provisioning/openstack/scale-up.yaml')
-    parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--interval', type=int, default=1,
+                        help='Interval between checks (1 min by default).')
+    parser.add_argument('--inventory-path', type=str, default='inventory',
+                        help='Path to ansible inventory.')
+    parser.add_argument('--openshift-ansible_path', type=str,
+                        default='openshift-ansible',
+                        help='Path to openshift-ansible repository.')
+    parser.add_argument('--upscaling-path', type=str,
+                        default='openshift-ansible-contrib/playbooks/provisioning/openstack/scale-up.yaml',
+                        help='Path to upscaling playbook.')
+    parser.add_argument('--debug', action='store_true',
+                        help='When set, debug output is printed out.')
     args = parser.parse_args()
 
     # Set alarm interval
-    alarm_interval = args.interval
+    alarm_interval = int(args.interval) * 60
 
     # Create and run an autoscaling service
     service = AutoScaling(args.debug, args.inventory_path,
