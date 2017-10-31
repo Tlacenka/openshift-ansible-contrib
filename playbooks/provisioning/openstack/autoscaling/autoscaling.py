@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import argparse
+import logging
 import os
 import signal
 from subprocess import call
@@ -38,13 +39,11 @@ class AutoScaling:
        scaling events when certain limits are met.
     '''
 
-    def __init__(self, debug, inventory_path, openshift_ansible_path,
-                 upscaling_path):
+    def __init__(self, inventory_path, openshift_ansible_path, upscaling_path):
 
         # Set attributes
         self.check_history = [False, False, False]  # True = workload exceeded
         self.increment_by = 1
-        self.debug = debug
         self.inventory_path = inventory_path
         self.openshift_ansible_path = openshift_ansible_path
         self.upscaling_path = upscaling_path
@@ -52,7 +51,7 @@ class AutoScaling:
         # shade example
         # self.shade_cloud = shade.openstack_cloud()
         # networks = self.shade_cloud.list_networks()
-        # print(networks)
+        # logging.debug(networks)
 
         # Connect to Gnocchi client
         auth = keystone_id.Password(auth_url=os.environ['OS_AUTH_URL'],
@@ -67,13 +66,12 @@ class AutoScaling:
         cpu_util_id = self.gnocchi_session.metric.create(
                       {'name': 'cpu_util'})['id']
 
-        # print(self.gnocchi_session.metric.list())
+        # logging.debug(self.gnocchi_session.metric.list())
 
         # Delete the metric
         self.gnocchi_session.metric.delete(cpu_util_id)
 
-        if self.debug:
-            print('Setting first alarm')
+        logging.debug('Setting first alarm')
         signal.alarm(alarm_interval)
 
     def gather_metrics(self):
@@ -104,8 +102,7 @@ class AutoScaling:
         '''
 
         try:
-            if self.debug:
-                print('Stopping alarm')
+            logging.debug('Stopping alarm')
             signal.alarm(0)
 
             # Scaling process
@@ -116,14 +113,13 @@ class AutoScaling:
 
             # Check if it succeeded
             if retval:
-                print('Upscaling failed. For more info, open tmp.out')
+                logging.error('Upscaling failed. For more info, open tmp.out')
                 sys.exit(1)
 
-            if self.debug:
-                print('Upscaling ended. Resetting alarm.')
+            logging.debug('Upscaling ended. Resetting alarm.')
             signal.alarm(alarm_interval)
         except KeyboardInterrupt:
-            print('SIGINT received, ending run.')
+            logging.info('SIGINT received, ending run.')
             sys.exit(0)
 
     def perform_check(self):
@@ -139,22 +135,19 @@ class AutoScaling:
                 self.gather_metrics()
                 self.analyse_workload()
 
-                if self.debug:
-                    print('Decision making')
+                logging.debug('Decision making')
 
                 if self.upscaling_required():
-                    if self.debug:
-                        print('Upscaling started')
+                    logging.debug('Upscaling started')
                     self.trigger_upscaling()
 
-                print('End of check')
+                logging.debug('End of check')
                 try_again = False
             except KeyboardInterrupt:
-                print('SIGINT received, ending run.')
+                logging.info('SIGINT received, ending run.')
                 sys.exit(0)
             except SIGALRM:
-                if self.debug:
-                    print('Check lasted more than expected. Starting anew.')
+                logging.debug('Check lasted more than expected. Restarting.')
 
     def run_prototype(self):
         '''Perform checks every minute.
@@ -162,18 +155,16 @@ class AutoScaling:
         '''
 
         while True:
-            if self.debug:
-                print('Running prototype')
+            logging.debug('Running prototype')
 
             try:
                 while True:
                     time.sleep(1)
             except KeyboardInterrupt:
-                print('SIGINT received, ending run.')
+                logging.info('SIGINT received, ending run.')
                 sys.exit(0)
             except SIGALRM:
-                if self.debug:
-                    print('run_prototype: SIGALRM')
+                logging.debug('run_prototype: SIGALRM')
                 self.perform_check()
 
 
@@ -185,7 +176,7 @@ if __name__ == '__main__':
                         help='Interval between checks (1 min by default).')
     parser.add_argument('--inventory-path', type=str, default='inventory',
                         help='Path to ansible inventory.')
-    parser.add_argument('--openshift-ansible_path', type=str,
+    parser.add_argument('--openshift-ansible-path', type=str,
                         default='openshift-ansible',
                         help='Path to openshift-ansible repository.')
     parser.add_argument('--upscaling-path', type=str,
@@ -198,13 +189,17 @@ if __name__ == '__main__':
     # Set alarm interval
     alarm_interval = int(args.interval) * 60
 
-    # Create and run an autoscaling service
-    service = AutoScaling(args.debug, args.inventory_path,
-                          args.openshift_ansible_path, args.upscaling_path)
+    # Create a logging object, set threshold for logging severity
+    debug_lvl = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(level=debug_lvl)
 
-    if service.debug:
-        print('Auto-scaling service is starting.' +
-              'In order to stop this service in a clean manner, press Ctrl+C.')
+    # Create and run an autoscaling service
+    service = AutoScaling(args.inventory_path, args.openshift_ansible_path,
+                          args.upscaling_path)
+
+    logging.info('Auto-scaling service is starting.' +
+                 'In order to stop this service in a clean manner, ' +
+                 'press Ctrl+C.')
     service.run_prototype()
 
 
