@@ -13,15 +13,16 @@ Its checking procedure consists of:
 4. If needed, triggering the corresponding scaling procedure and checking that it was successful.
 
 The checks are invoked by `SIGALRM` signal every `N` minutes, raising a `SIGALRM`
-exception that calls the `perform_check()` method.
-Because scaling can take longer than one period, the alarm is stopped during
-scaling and reset after the process has sucessfully finished.
+exception that calls the `perform_check()` method and resets the alarm. By doing so,
+it is easier to track how much time the check takes.
 If a check that does not involve scaling takes longer than one period
 (potentially due to a slower network connection), it is restarted.
+Because scaling can take longer than one period, the alarm is stopped during
+scaling and reset after the process has sucessfully finished.
 
 ## Usage
 
-*Running the script*:
+**Running the script**:
 
 ```
 python <path>/autoscaling.py [--debug] [--interval MIN] [--inventory-path PATH]
@@ -31,7 +32,7 @@ python <path>/autoscaling.py [--debug] [--interval MIN] [--inventory-path PATH]
 The script can be exited at any time after initialization by sending the `SIGINT` to the
 script (pressing `Ctrl+C`).
 
-*Arguments*:
+**Arguments**:
 * `--debug` enables logging for debug messages
 * `--interval MIN` sets period for one scaling iteration (1 minute by default)
 * `--inventory-path PATH` sets path to your ansible inventory ('inventory' by default)
