@@ -35,6 +35,6 @@ script (pressing `Ctrl+C`).
 **Arguments**:
 * `--debug` enables logging for debug messages
 * `--interval MIN` sets period for one scaling iteration (1 minute by default)
-* `--inventory-path PATH` sets path to your ansible inventory ('inventory' by default)
-* `--openshift-ansible-path PATH` sets path to `openshift-ansible` directory ('openshift-ansible' by default)
-* `--upscaling-path PATH` sets path to the upscaling playbook ('openshift-ansible-contrib/playbooks/provisioning/openstack/scale-up.yaml' by default)
+* `--inventory-path PATH` sets path to your ansible inventory (*'inventory'* by default)
+* `--openshift-ansible-path PATH` sets path to `openshift-ansible` directory (*'openshift-ansible'* by default)
+* `--upscaling-path PATH` sets path to the upscaling playbook (*'openshift-ansible-contrib/playbooks/provisioning/openstack/scale-up.yaml'* by default)
