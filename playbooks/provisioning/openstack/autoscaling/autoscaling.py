@@ -191,7 +191,8 @@ if __name__ == '__main__':
 
     # Create a logging object, set threshold for logging severity
     debug_lvl = logging.DEBUG if args.debug else logging.INFO
-    logging.basicConfig(level=debug_lvl)
+    logging.basicConfig(level=debug_lvl,
+                        format='%(asctime)s %(levelname)s: %(message)s')
 
     # Create and run an autoscaling service
     service = AutoScaling(args.inventory_path, args.openshift_ansible_path,
