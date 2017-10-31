@@ -23,6 +23,9 @@ alarm_interval = 60
 class SIGALRM(Exception):
     pass
 
+# Exception for when scaling has failed
+class ScalingFailed(Exception):
+    pass
 
 # Handle SIGALRM
 def handler(signum, frame):
@@ -113,14 +116,12 @@ class AutoScaling:
 
             # Check if it succeeded
             if retval:
-                logging.error('Upscaling failed. For more info, open tmp.out')
-                sys.exit(1)
+                raise ScalingFailed
 
             logging.debug('Upscaling ended. Resetting alarm.')
             signal.alarm(alarm_interval)
         except KeyboardInterrupt:
-            logging.info('SIGINT received, ending run.')
-            sys.exit(0)
+            raise
 
     def perform_check(self):
         '''Gathers metrics,
@@ -143,11 +144,10 @@ class AutoScaling:
 
                 logging.debug('End of check')
                 try_again = False
-            except KeyboardInterrupt:
-                logging.info('SIGINT received, ending run.')
-                sys.exit(0)
             except SIGALRM:
                 logging.debug('Check lasted more than expected. Restarting.')
+            except (KeyboardInterrupt, ScalingFailed):
+                raise
 
     def run_prototype(self):
         '''Perform checks every minute.
@@ -160,12 +160,11 @@ class AutoScaling:
             try:
                 while True:
                     time.sleep(1)
-            except KeyboardInterrupt:
-                logging.info('SIGINT received, ending run.')
-                sys.exit(0)
             except SIGALRM:
                 logging.debug('run_prototype: SIGALRM')
                 self.perform_check()
+            except (KeyboardInterrupt, ScalingFailed):
+                raise
 
 
 if __name__ == '__main__':
@@ -201,7 +200,14 @@ if __name__ == '__main__':
     logging.info('Auto-scaling service is starting.' +
                  'In order to stop this service in a clean manner, ' +
                  'press Ctrl+C.')
-    service.run_prototype()
+    try:
+        service.run_prototype()
+    except KeyboardInterrupt:
+        logging.info('SIGINT received, ending run.')
+        sys.exit(0)
+    except ScalingFailed:
+        logging.error('Upscaling failed. For more info, open tmp.out')
+        sys.exit(1)
 
 
 # Sources, documentation:
