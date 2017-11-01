@@ -63,6 +63,7 @@ class AutoScaling:
         """
         # Set attributes
         self.check_history = [False, False, False]  # True = workload exceeded
+        self.index = 0
         self.increment_by = 1
         self.inventory_path = inventory_path
         self.openshift_ansible_path = openshift_ansible_path
@@ -104,15 +105,15 @@ class AutoScaling:
 
         Store results (in this case, to check_history).
         """
-        pass
+        self.check_history[self.index] = True
+        self.index = (self.index + 1) % len(self.check_history)
 
     def upscaling_required(self):
         """Based on analysis result, return whether scaling should be triggered.
 
         In this case, whenever workload exceeds limit 3 times in a row.
         """
-        return True
-        # return all(self.history_check)
+        return all(self.history_check)
 
     def trigger_upscaling(self):
         """Perform upscaling.
@@ -135,6 +136,9 @@ class AutoScaling:
             # Check if it succeeded
             if retval:
                 raise ScalingFailed
+            else:
+                # Reset the check history
+                self.check_history[:] = [False] * len(self.check_history)
 
             logging.debug('Upscaling ended. Resetting alarm.')
             signal.alarm(alarm_interval)
