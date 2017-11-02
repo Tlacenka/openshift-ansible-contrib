@@ -113,7 +113,7 @@ class AutoScaling:
 
         In this case, whenever workload exceeds limit 3 times in a row.
         """
-        return all(self.history_check)
+        return all(self.check_history)
 
     def trigger_upscaling(self):
         """Perform upscaling.
