@@ -84,13 +84,34 @@ class AutoScaling:
 
         # Gnocchi Example
         # Create a metric
-        cpu_util_id = self.gnocchi_session.metric.create(
-                      {'name': 'cpu_util'})['id']
+        #cpu_util_id = self.gnocchi_session.metric.create(
+        #              {'name': 'cpu_util'})['id']
 
-        # logging.debug(self.gnocchi_session.metric.list())
+        # List all available metrics
+        #logging.debug(self.gnocchi_session.metric.list())
+
+        # List all resources
+        #logging.debug(self.gnocchi_session.resource.list())
+        resources = self.gnocchi_session.resource.list()
+        
+        # For each resource, get its cpu_util metric
+        #for r in resources:
+        #    logging.debug(r['id'])
+        #    logging.debug(self.gnocchi_session.get('cpu_util', r['id']))
+
+        # For each resource, display the metric values
+        for r in resources:
+            print('Resource ' + r['id'] + ':\n')
+            try:
+                logging.debug(self.gnocchi_session.metric.get_measures('cpu_util', resource_id=r['id']))
+            except Exception:
+                print('This resource does not have any metric.')
+
+        # Get last x values from it and decide whether to scale
+        # it is [timestamp, granularity, value]
 
         # Delete the metric
-        self.gnocchi_session.metric.delete(cpu_util_id)
+        #self.gnocchi_session.metric.delete(cpu_util_id)
 
         logging.debug('Setting first alarm')
         signal.alarm(alarm_interval)
@@ -132,6 +153,9 @@ class AutoScaling:
                 retval = call(['ansible-playbook', '-i', self.inventory_path,
                                '-e', 'increment_by=' + str(self.increment_by),
                                self.upscaling_path], stdout=fp, stderr=fp)
+
+                # Then post-validation - tweak this
+                # https://github.com/openshift/openshift-ansible-contrib/blob/master/ci/openstack/validate.sh
 
             # Check if it succeeded
             if retval:
