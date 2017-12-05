@@ -16,18 +16,17 @@ import time
 
 
 from gnocchiclient.v1 import client as gnocchi_client
-# pip install python-novaclient
-import novaclient
-from novaclient import client as nova_client
 from keystoneauth1.identity import generic as keystone_id
 from keystoneauth1 import session
+from novaclient import client as nova_client
 import shade
 
 
 # Global variables
-alarm_interval = 60
+alarm_interval = 60 * 5  # in seconds - atm, granularity is 300 seconds
+check_len = 3            # how many loads exceeding threshold trigger upscaling
+compute_version = '2.1'  # novaclient.api_versions.APIVersion not supported?
 
-compute_version = '2.1' # novaclient.api_versions.APIVersion not supported?
 
 # Exception for alarm handling
 class SIGALRM(Exception):
@@ -66,7 +65,8 @@ class AutoScaling:
         Attributes are set, OpenStack authentication is performed.
         """
         # Set attributes
-        self.check_history = [False, False, False]  # True = workload exceeded
+        self.check_history = [False] * check_len  # True = workload exceeded
+        self.threshold = 0.6  # Threshold for workload - now 60%
         self.index = 0
         self.increment_by = 1
         self.inventory_path = inventory_path
@@ -78,69 +78,77 @@ class AutoScaling:
         # networks = self.shade_cloud.list_networks()
         # logging.debug(networks)
 
-        # Connect to Gnocchi client
+        # Authenticate at keystone
+        # Note: bunch of additional parameters due to PROJECT_NAME and v3
         auth = keystone_id.Password(auth_url=os.environ['OS_AUTH_URL'],
                                     username=os.environ['OS_USERNAME'],
                                     password=os.environ['OS_PASSWORD'],
                                     project_name=os.environ['OS_PROJECT_NAME'],
                                     user_domain_name=os.environ['OS_USER_DOMAIN_NAME'],
                                     project_domain_name=os.environ['OS_PROJECT_DOMAIN_NAME'])
-        # NOTE: OS_PROJECT_NAME changed from OS_TENANT_NAME
+
         keystone_session = session.Session(auth=auth)
 
         # Start Gnocchi session
         self.gnocchi_session = gnocchi_client.Client(session=keystone_session)
 
-        # Start Nova session - COMPUTE_API_VERSION?
+        # Start Nova session - OS_COMPUTE_API_VERSION as a global string
         self.nova_session = nova_client.Client(compute_version,
                                                session=keystone_session)
-
-        # Gnocchi Example
-
-        # List all available metrics
-        #logging.debug(self.gnocchi_session.metric.list())
-
-        # List all resources
-        #logging.debug(self.gnocchi_session.resource.list())
-        resources = self.gnocchi_session.resource.list()
-
-        # List all nova servers - TODO only the ones created from heat
-        servers = self.nova_session.servers.list()
-
-        # For each resource, get its cpu_util metric
-        #for r in resources:
-        #    logging.debug(r['id'])
-        #    logging.debug(self.gnocchi_session.get('cpu_util', r['id']))
-
-        # For each resource, display the metric values
-        for s in servers:
-            print('Server ' + s.id + ':\n')
-            try:
-                logging.debug(self.gnocchi_session.metric.get_measures('cpu_util', resource_id=s.id))
-            except Exception:
-                print('This server does not have any metric.')
-
-        # Get last x values from it and decide whether to scale
-        # it is [timestamp, granularity, value]
-
-        # Delete the metric
-        #self.gnocchi_session.metric.delete(cpu_util_id)
 
         logging.debug('Setting first alarm')
         signal.alarm(alarm_interval)
 
     def gather_metrics(self):
         """Gather metrics."""
+        # In heat, this is handled followingly
         # https://github.com/redhat-openstack/openshift-on-openstack/blob/master/openshift.yaml#L804-L840
-        pass
+
+        try:
+
+            # List all nova servers - TODO only the ones created from heat
+            servers = self.nova_session.servers.list()
+
+            latest_metrics = []  # Array for storing latest metric from servers
+
+            # For each resource, display the metric values
+            for s in servers:
+                print('Server ' + s.id + ':\n')
+                try:
+                    # Get the last item (workload) of the last measurement
+                    # Measurements: list of (timestamp, granularity, value)
+                    latest_metrics.append(self.gnocchi_session.metric.get_measures(
+                                             'cpu_util', resource_id=s.id)[-1][2])
+
+                    # TODO check the timestamp for issues
+                except Exception:
+                    print('This server does not have any metric.')
+
+        except KeyboardInterrupt:
+            raise
+
+        return latest_metrics
 
     def analyse_workload(self):
         """Run algorithm/check to determine whether scaling should be triggered.
 
         Store results (in this case, to check_history).
         """
-        self.check_history[self.index] = True
-        self.index = (self.index + 1) % len(self.check_history)
+        try:
+            latest_metrics = self.gather_metrics()
+            exceeded = False
+
+            if latest_metrics:
+
+                # Compute average workload
+                avg_load = sum(latest_metrics) / len(latest_metrics)
+                exceeded = avg_load >= self.threshold
+
+            # Add result to the check history
+            self.check_history[self.index] = exceeded
+            self.index = (self.index + 1) % len(self.check_history)
+        except KeyboardInterrupt:
+            raise
 
     def upscaling_required(self):
         """Based on analysis result, return whether scaling should be triggered.
@@ -175,7 +183,7 @@ class AutoScaling:
                 raise ScalingFailed
             else:
                 # Reset the check history
-                self.check_history[:] = [False] * len(self.check_history)
+                self.check_history[:] = [False] * check_len
 
             logging.debug('Upscaling ended. Resetting alarm.')
             signal.alarm(alarm_interval)
@@ -192,7 +200,6 @@ class AutoScaling:
 
         while try_again:
             try:
-                self.gather_metrics()
                 self.analyse_workload()
 
                 logging.debug('Decision making')
@@ -238,7 +245,8 @@ if __name__ == '__main__':
                         default='openshift-ansible',
                         help='Path to openshift-ansible repository.')
     parser.add_argument('--upscaling-path', type=str,
-                        default='openshift-ansible-contrib/playbooks/provisioning/openstack/scale-up.yaml',
+                        default='openshift-ansible-contrib/playbooks/' +
+                                'provisioning/openstack/scale-up.yaml',
                         help='Path to upscaling playbook.')
     parser.add_argument('--debug', action='store_true',
                         help='When set, debug output is printed out.')
@@ -277,3 +285,4 @@ if __name__ == '__main__':
 # http://gnocchi.xyz/gnocchiclient/api/gnocchiclient.v1.metric.html
 # https://julien.danjou.info/blog/2015/openstack-gnocchi-first-release
 # https://docs.openstack.org/python-novaclient/latest/reference/api/index.html
+# https://ask.openstack.org/en/question/989/how-to-list-server-id-using-python-novaclient-python-api/
