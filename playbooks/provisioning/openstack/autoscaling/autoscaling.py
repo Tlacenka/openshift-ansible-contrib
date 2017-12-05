@@ -16,7 +16,9 @@ import time
 
 
 from gnocchiclient.v1 import client as gnocchi_client
-from novaclient import client as nova_client # pip install python-novaclient
+# pip install python-novaclient
+import novaclient
+from novaclient import client as nova_client
 from keystoneauth1.identity import generic as keystone_id
 from keystoneauth1 import session
 import shade
@@ -25,6 +27,7 @@ import shade
 # Global variables
 alarm_interval = 60
 
+compute_version = '2.1' # novaclient.api_versions.APIVersion not supported?
 
 # Exception for alarm handling
 class SIGALRM(Exception):
@@ -79,14 +82,18 @@ class AutoScaling:
         auth = keystone_id.Password(auth_url=os.environ['OS_AUTH_URL'],
                                     username=os.environ['OS_USERNAME'],
                                     password=os.environ['OS_PASSWORD'],
-                                    project_name=os.environ['OS_TENANT_NAME'])
+                                    project_name=os.environ['OS_PROJECT_NAME'],
+                                    user_domain_name=os.environ['OS_USER_DOMAIN_NAME'],
+                                    project_domain_name=os.environ['OS_PROJECT_DOMAIN_NAME'])
+        # NOTE: OS_PROJECT_NAME changed from OS_TENANT_NAME
         keystone_session = session.Session(auth=auth)
 
         # Start Gnocchi session
         self.gnocchi_session = gnocchi_client.Client(session=keystone_session)
 
-        # Start Nova session
-        self.nova_session = nova_client.Client(session=keystone_session)
+        # Start Nova session - COMPUTE_API_VERSION?
+        self.nova_session = nova_client.Client(compute_version,
+                                               session=keystone_session)
 
         # Gnocchi Example
 
@@ -107,9 +114,9 @@ class AutoScaling:
 
         # For each resource, display the metric values
         for s in servers:
-            print('Server ' + s['id'] + ':\n')
+            print('Server ' + s.id + ':\n')
             try:
-                logging.debug(self.gnocchi_session.metric.get_measures('cpu_util', resource_id=s['id']))
+                logging.debug(self.gnocchi_session.metric.get_measures('cpu_util', resource_id=s.id))
             except Exception:
                 print('This server does not have any metric.')
 
