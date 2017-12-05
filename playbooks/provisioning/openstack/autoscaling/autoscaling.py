@@ -113,7 +113,6 @@ class AutoScaling:
 
             # For each resource, display the metric values
             for s in servers:
-                print('Server ' + s.id + ':\n')
                 try:
                     # Get the last item (workload) of the last measurement
                     # Measurements: list of (timestamp, granularity, value)
@@ -136,6 +135,10 @@ class AutoScaling:
         """
         try:
             latest_metrics = self.gather_metrics()
+
+            # Print out metrics
+            logging.info(latest_metrics)
+
             exceeded = False
 
             if latest_metrics:
