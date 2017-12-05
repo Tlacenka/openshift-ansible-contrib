@@ -15,7 +15,8 @@ import sys
 import time
 
 
-from gnocchiclient.v1 import client
+from gnocchiclient.v1 import client as gnocchi_client
+from novaclient import client as nova_client # pip install python-novaclient
 from keystoneauth1.identity import generic as keystone_id
 from keystoneauth1 import session
 import shade
@@ -80,12 +81,14 @@ class AutoScaling:
                                     password=os.environ['OS_PASSWORD'],
                                     project_name=os.environ['OS_TENANT_NAME'])
         keystone_session = session.Session(auth=auth)
-        self.gnocchi_session = client.Client(session=keystone_session)
+
+        # Start Gnocchi session
+        self.gnocchi_session = gnocchi_client.Client(session=keystone_session)
+
+        # Start Nova session
+        self.nova_session = nova_client.Client(session=keystone_session)
 
         # Gnocchi Example
-        # Create a metric
-        #cpu_util_id = self.gnocchi_session.metric.create(
-        #              {'name': 'cpu_util'})['id']
 
         # List all available metrics
         #logging.debug(self.gnocchi_session.metric.list())
@@ -93,19 +96,22 @@ class AutoScaling:
         # List all resources
         #logging.debug(self.gnocchi_session.resource.list())
         resources = self.gnocchi_session.resource.list()
-        
+
+        # List all nova servers - TODO only the ones created from heat
+        servers = self.nova_session.servers.list()
+
         # For each resource, get its cpu_util metric
         #for r in resources:
         #    logging.debug(r['id'])
         #    logging.debug(self.gnocchi_session.get('cpu_util', r['id']))
 
         # For each resource, display the metric values
-        for r in resources:
-            print('Resource ' + r['id'] + ':\n')
+        for s in servers:
+            print('Server ' + s['id'] + ':\n')
             try:
-                logging.debug(self.gnocchi_session.metric.get_measures('cpu_util', resource_id=r['id']))
+                logging.debug(self.gnocchi_session.metric.get_measures('cpu_util', resource_id=s['id']))
             except Exception:
-                print('This resource does not have any metric.')
+                print('This server does not have any metric.')
 
         # Get last x values from it and decide whether to scale
         # it is [timestamp, granularity, value]
@@ -263,3 +269,4 @@ if __name__ == '__main__':
 # http://aalvarez.me/blog/posts/understanding-gnocchi-measures.html
 # http://gnocchi.xyz/gnocchiclient/api/gnocchiclient.v1.metric.html
 # https://julien.danjou.info/blog/2015/openstack-gnocchi-first-release
+# https://docs.openstack.org/python-novaclient/latest/reference/api/index.html
