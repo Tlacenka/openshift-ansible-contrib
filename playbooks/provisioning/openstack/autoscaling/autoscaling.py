@@ -66,7 +66,7 @@ class AutoScaling:
         """
         # Set attributes
         self.check_history = [False] * check_len  # True = workload exceeded
-        self.threshold = 0.6  # Threshold for workload - now 60%
+        self.threshold = 0.7  # Threshold for workload - now 70%
         self.index = 0
         self.increment_by = 1
         self.inventory_path = inventory_path
