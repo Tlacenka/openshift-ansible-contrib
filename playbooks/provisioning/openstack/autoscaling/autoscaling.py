@@ -186,7 +186,7 @@ class AutoScaling:
                 raise ScalingFailed
             else:
                 # Reset the check history
-                self.check_history[:] = [False] * check_len
+                self.check_history = [False] * check_len
 
             logging.debug('Upscaling ended. Resetting alarm.')
             signal.alarm(alarm_interval)
